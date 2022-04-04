@@ -12,16 +12,12 @@ fn compute_time_to_deliver(destination: Vec<Destination>) -> usize {
     if destination.is_empty() {
         0
     } else {
-        let b_count = destination
+        let (a, b): (Vec<_>, Vec<_>) = destination
             .iter()
-            .filter(|dest| dest == &&Destination::B)
-            .collect::<Vec<_>>()
-            .len();
-        let a_count = destination
-            .iter()
-            .filter(|dest| dest == &&Destination::A)
-            .collect::<Vec<_>>()
-            .len();
+            .partition(|&dest| dest == &Destination::A);
+
+        let a_count = a.len();
+        let b_count = b.len();
 
         if b_count > 0 {
             ((b_count - 1) / 2) * 10 + 5
