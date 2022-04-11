@@ -27,6 +27,54 @@ fn compute_time_to_deliver(destination: Vec<Destination>) -> usize {
     }
 }
 
+struct Container {
+    destination: Destination
+}
+
+impl Container {
+    fn is_delivered(&self) -> bool {
+        false
+    }
+}
+
+struct World {
+    containers: Vec<Container>
+}
+
+impl World {
+    fn new(destinations: Vec<Destination>) -> Self {
+        Self {
+            containers : destinations.into_iter().map(|dest| Container { destination : dest}).collect()
+        }
+    }
+
+    fn deliver_containers(self) -> usize {
+        while !self.is_everything_delivered() {
+            // TODO : fix infinite loop
+        }
+        5
+    }
+
+    fn is_everything_delivered(&self) -> bool {
+        false
+    }
+}
+
+struct Transport {
+}
+
+impl Transport {
+    fn move_forward(self) -> Self {
+        self
+    }
+}
+
+//    P -------- A
+//    | 1 weight + 4 weight
+// X -
+//    | 5 weight
+//    B
+
 #[cfg(test)]
 mod test {
     use super::Destination::{self, *};
@@ -42,7 +90,8 @@ mod test {
     #[case(vec![B, B, B, B, B], 25, "2 truck 25h")]
     #[case(vec![B, B, B, B, B, B, B], 35, "2 truck 35")]
     #[case(vec![A], 5, "one truck 1h + one boat 4h")]
-    #[case(vec![A, A], 13, "two truck 1h + one boat 4h, 1 + 4 + 4 + 4 = 13")]
+    #[case(vec![A, A], 13, "two trucks 1h + one boat 4h, 1 + 4 + 4 + 4 = 13")]
+    // #[case(vec![A, A, B, A, B, B, A, B], 29, "")]
     fn should_compute_time_with_2_trucks(
         #[case] dest: Vec<Destination>,
         #[case] expect: usize,
@@ -51,4 +100,10 @@ mod test {
         let hours_to_deliver = compute_time_to_deliver(dest);
         assert_eq!(expect, hours_to_deliver, "{msg}");
     }
+
+    #[test]
+    fn should_compute_time_to_deliver_containers() {
+        assert_eq!(5, World::new(vec![B]).deliver_containers());
+        assert_eq!(15, World::new(vec![B, B, B]).deliver_containers());
+    } 
 }
