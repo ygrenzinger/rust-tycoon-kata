@@ -1,3 +1,5 @@
+use crate::Destination::B;
+
 fn main() {
     println!("Hello, world!");
 }
@@ -33,7 +35,7 @@ struct Container {
 
 impl Container {
     fn is_delivered(&self) -> bool {
-        false
+        true
     }
 }
 
@@ -42,6 +44,10 @@ struct World {
 }
 
 impl World {
+    // 1 destination B
+    // 2 truck
+    // Factory -> B
+
     fn new(destinations: Vec<Destination>) -> Self {
         Self {
             containers : destinations.into_iter().map(|dest| Container { destination : dest}).collect()
@@ -50,22 +56,48 @@ impl World {
 
     fn deliver_containers(self) -> usize {
         while !self.is_everything_delivered() {
-            // TODO : fix infinite loop
+            // self.containers.iter_mut().for_each(|container| container.arrive_at(&container.destination))
+
         }
-        5
+        0
     }
 
     fn is_everything_delivered(&self) -> bool {
-        false
+        self.containers.iter().all(|c| c.is_delivered())
     }
 }
 
 struct Transport {
+    distance_traveled: u8,
+    load: Option<(Container, u8)>
 }
 
 impl Transport {
+
+    fn is_available(&self) -> bool {
+        return self.distance_traveled == 0
+    }
+
+    fn is_at_destination(&self) -> bool {
+        return match self.load {
+            None => false,
+            Some((_, d)) => d == self.distance_traveled
+        }
+        // let b =  self.load.map_or(false, |(_, d)| d == self.distance_traveled);
+    }
+
     fn move_forward(self) -> Self {
-        self
+        return if self.is_at_destination() {
+            Transport {
+                distance_traveled: self.distance_traveled - 1,
+                load: Option::None
+            }
+        } else {
+            Transport {
+                distance_traveled: self.distance_traveled + 1,
+                load: self.load
+            }
+        }
     }
 }
 
