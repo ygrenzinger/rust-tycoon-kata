@@ -4,7 +4,7 @@ fn main() {
     println!("Hello, world!");
 }
 
-#[derive(PartialEq)]
+#[derive(Debug, PartialEq)]
 enum Destination {
     A,
     B,
@@ -29,11 +29,18 @@ fn compute_time_to_deliver(destination: Vec<Destination>) -> usize {
     }
 }
 
+#[derive(Debug, PartialEq)]
 struct Container {
     destination: Destination
 }
 
 impl Container {
+    fn new(destination: Destination) -> Self {
+        Self {
+            destination
+        }
+    }
+
     fn is_delivered(&self) -> bool {
         true
     }
@@ -67,6 +74,7 @@ impl World {
     }
 }
 
+#[derive(Debug)]
 struct Transport {
     distance_traveled: u8,
     load: Option<(Container, u8)>
@@ -74,28 +82,35 @@ struct Transport {
 
 impl Transport {
 
+    fn new() -> Self {
+        Self {
+            distance_traveled: 0,
+            load: None
+        }
+    }
+
+    fn load(&mut self, container: Container, destination: u8) {
+        self.load = Some((container, destination));
+    }
+
     fn is_available(&self) -> bool {
         return self.distance_traveled == 0
     }
 
-    fn is_at_destination(&self) -> bool {
-        return match self.load {
-            None => false,
-            Some((_, d)) => d == self.distance_traveled
-        }
-        // let b =  self.load.map_or(false, |(_, d)| d == self.distance_traveled);
+    fn is_loaded(&self) -> bool {
+        return self.load.is_some();
     }
 
-    fn move_forward(self) -> Self {
-        return if self.is_at_destination() {
-            Transport {
-                distance_traveled: self.distance_traveled - 1,
-                load: Option::None
+    fn move_forward(&mut self) {
+        match self.load {
+            None => if self.distance_traveled > 0 {
+                self.distance_traveled = self.distance_traveled - 1;
             }
-        } else {
-            Transport {
-                distance_traveled: self.distance_traveled + 1,
-                load: self.load
+            Some((_, d)) => {
+                self.distance_traveled = self.distance_traveled + 1;
+                if self.distance_traveled == d {
+                    self.load = None;
+                }
             }
         }
     }
@@ -124,6 +139,7 @@ mod test {
     #[case(vec![A], 5, "one truck 1h + one boat 4h")]
     #[case(vec![A, A], 13, "two trucks 1h + one boat 4h, 1 + 4 + 4 + 4 = 13")]
     // #[case(vec![A, A, B, A, B, B, A, B], 29, "")]
+    #[ignore]
     fn should_compute_time_with_2_trucks(
         #[case] dest: Vec<Destination>,
         #[case] expect: usize,
@@ -134,8 +150,37 @@ mod test {
     }
 
     #[test]
+    #[ignore]
     fn should_compute_time_to_deliver_containers() {
         assert_eq!(5, World::new(vec![B]).deliver_containers());
         assert_eq!(15, World::new(vec![B, B, B]).deliver_containers());
-    } 
+    }
+
+    #[test]
+    fn should_not_move_if_transport_not_loaded() {
+        let mut transport = Transport::new();
+        transport.move_forward();
+        assert_eq!(false, transport.is_loaded());
+        assert_eq!(0, transport.distance_traveled);
+    }
+
+    #[test]
+    fn should_move_if_transport_loaded() {
+        let mut transport = Transport::new();
+        transport.load(Container::new(B), 2);
+        transport.move_forward();
+        assert_eq!(true, transport.is_loaded());
+        assert_eq!(1, transport.distance_traveled);
+    }
+
+    #[test]
+    fn should_make_transport_reach_destination_and_unload() {
+        let mut transport = Transport::new();
+        transport.load(Container::new(B), 2);
+        transport.move_forward();
+        transport.move_forward();
+        assert_eq!(2, transport.distance_traveled);
+        assert_eq!(false, transport.is_loaded());
+    }
+
 }
