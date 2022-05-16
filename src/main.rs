@@ -4,7 +4,7 @@ fn main() {
     println!("Hello, world!");
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 enum Location {
     FACTORY,
     A,
@@ -44,11 +44,8 @@ impl Container {
         }
     }
 
-    fn loaded(self) -> Self {
-        return Container {
-            destination: self.destination,
-            location: None
-        }
+    fn loaded(&mut self) {
+        self.location = None;
     }
 
     fn is_delivered(&self) -> bool {
@@ -74,10 +71,19 @@ impl World {
         }
     }
 
-    fn deliver_containers(self) -> usize {
+    fn deliver_containers(&mut self) -> usize {
+        let mut transport = Transport::new();
         let mut time_elapsed = 0;
         while !self.is_everything_delivered() {
-            // self.containers.iter_mut().for_each(|container| container.arrive_at(&container.destination))
+            if transport.is_loaded() {
+                transport.move_forward();
+            } else {
+                let container = self.containers.iter_mut().find(|c| !(c.location == None || c.is_delivered()));
+                if let Some(c) = container {
+                    transport.load(c, 5, Location::B);
+                }
+            }
+            transport.move_forward();
             time_elapsed = time_elapsed + 1;
 
         }
@@ -85,15 +91,14 @@ impl World {
     }
 
     fn is_everything_delivered(&self) -> bool {
-        true
-        //self.containers.iter().all(|c| c.is_delivered())
+        self.containers.iter().all(|c| c.is_delivered())
     }
 }
 
 #[derive(Debug)]
 struct Transport {
     distance: u8,
-    load: Option<(Container, u8)>
+    load: Option<(Container, u8, Location)>
 }
 
 impl Transport {
@@ -105,8 +110,9 @@ impl Transport {
         }
     }
 
-    fn load(&mut self, container: Container, destination: u8) {
-        self.load = Some((container.loaded(), destination));
+    fn load(&mut self, &mut container: Container, distance: u8, destination: Location) {
+        container.loaded();
+        self.load = Some((container, distance, destination));
     }
 
     fn is_available(&self) -> bool {
@@ -117,29 +123,43 @@ impl Transport {
         return self.load.is_some();
     }
 
-    fn move_forward(self) -> Self {
-        return match self.load {
+    fn move_forward(&mut self) {
+        match &mut self.load {
             None => if self.distance > 0 {
-                Transport {
-                    distance: self.distance - 1,
-                    load: self.load
-                }
-            } else {
-                self
+                self.distance = self.distance - 1;
             },
-            Some((_, d)) => {
-                let distance = self.distance + 1;
-                let load = if distance == d {
-                    None
-                } else {
-                    self.load
+            Some((container, d, destination)) => {
+                self.distance = self.distance + 1;
+                // arriving at destination
+                if self.distance == *d {
+                    container.location = Some(destination.clone());
+                    self.load = None;
                 };
-                Transport {
-                    distance,
-                    load
-                }
             }
-        }
+        };
+
+        // return match self.load {
+        //     None => if self.distance > 0 {
+        //         Transport {
+        //             distance: self.distance - 1,
+        //             load: self.load
+        //         }
+        //     } else {
+        //         self
+        //     },
+        //     Some((_, d)) => {
+        //         let distance = self.distance + 1;
+        //         let load = if distance == d {
+        //             None
+        //         } else {
+        //             self.load
+        //         };
+        //         Transport {
+        //             distance,
+        //             load
+        //         }
+        //     }
+        // }
     }
 }
 
@@ -186,7 +206,7 @@ mod test {
     #[test]
     fn should_not_leave_base_if_transport_not_loaded() {
         let mut transport = Transport::new();
-        let transport = transport.move_forward();
+        transport.move_forward();
         assert_eq!(false, transport.is_loaded());
         assert_eq!(0, transport.distance);
     }
@@ -194,8 +214,8 @@ mod test {
     #[test]
     fn should_move_if_transport_loaded() {
         let mut transport = Transport::new();
-        transport.load(Container::new(B), 2);
-        let transport = transport.move_forward();
+        transport.load(Container::new(B), 2, Location::B);
+        transport.move_forward();
         assert_eq!(true, transport.is_loaded());
         assert_eq!(1, transport.distance);
     }
@@ -203,8 +223,8 @@ mod test {
     #[test]
     fn should_make_transport_reach_destination_and_unload() {
         let mut transport = Transport::new();
-        transport.load(Container::new(B), 2);
-        let transport = (0..2).fold(transport, |transport,_| transport.move_forward());
+        transport.load(Container::new(B), 2, Location::B);
+        (0..2).for_each(|_| transport.move_forward());
         assert_eq!(2, transport.distance);
         assert_eq!(false, transport.is_loaded());
     }
@@ -212,8 +232,8 @@ mod test {
     #[test]
     fn should_make_transport_return_to_destination() {
         let mut transport = Transport::new();
-        transport.load(Container::new(B), 2);
-        let transport = (0..4).fold(transport, |transport,_| transport.move_forward());
+        transport.load(Container::new(B), 2, Location::B);
+        (0..4).for_each(|_| transport.move_forward());
         assert_eq!(0, transport.distance);
         assert_eq!(false, transport.is_loaded());
     }
