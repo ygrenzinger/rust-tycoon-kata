@@ -1,3 +1,5 @@
+use uuid::Uuid;
+
 use crate::Location::{B, FACTORY};
 
 fn main() {
@@ -15,9 +17,7 @@ fn compute_time_to_deliver(destination: Vec<Location>) -> usize {
     if destination.is_empty() {
         0
     } else {
-        let (a, b): (Vec<_>, Vec<_>) = destination
-            .iter()
-            .partition(|&dest| dest == &Location::A);
+        let (a, b): (Vec<_>, Vec<_>) = destination.iter().partition(|&dest| dest == &Location::A);
 
         let a_count = a.len();
         let b_count = b.len();
@@ -25,39 +25,53 @@ fn compute_time_to_deliver(destination: Vec<Location>) -> usize {
         if b_count > 0 {
             ((b_count - 1) / 2) * 10 + 5
         } else {
-            (((a_count - 1) / 2) + 1) + (((a_count - 1)) * 8 + 4)
+            (((a_count - 1) / 2) + 1) + ((a_count - 1) * 8 + 4)
         }
     }
 }
 
 #[derive(Debug, PartialEq)]
-struct Container {
-    destination: Location,
-    location: Option<Location>
+struct InTransitContainer {
+    id: Uuid,
+}
+
+struct FixedContainer {
+    id: Uuid,
+}
+
+#[derive(Debug)]
+enum Container {
+    InTransit(InTransitContainer),
+    At(FixedContainer),
 }
 
 impl Container {
-    fn new(destination: Location) -> Self {
+    fn new(id: Uuid, destination: Location) -> Self {
         Self {
+            id,
             destination,
-            location: Some(FACTORY)
+            location: Position::At(FACTORY),
         }
     }
 
-    fn loaded(&mut self) {
-        self.location = None;
+    fn loaded(self) -> Self {
+        Self {
+            location: Position::InTransit,
+            ..self
+        }
     }
 
     fn is_delivered(&self) -> bool {
         return match &self.location {
             None => false,
-            Some(location) => location == &self.destination
-        }
+            Some(location) => location == &self.destination,
+        };
     }
 }
 
 struct World {
-    containers: Vec<Container>
+    containers: Vec<Container>,
+    transports: Vec<Transport>,
 }
 
 impl World {
@@ -67,25 +81,37 @@ impl World {
 
     fn new(destinations: Vec<Location>) -> Self {
         Self {
-            containers : destinations.into_iter().map(|dest| Container::new(dest)).collect()
+            containers: destinations
+                .into_iter()
+                .map(|dest| Container::new(Uuid::new_v4(), dest))
+                .collect(),
+            transports: vec![Transport::new(), Transport::new()],
         }
     }
 
     fn deliver_containers(&mut self) -> usize {
         let mut transport = Transport::new();
         let mut time_elapsed = 0;
+
         while !self.is_everything_delivered() {
+            for transport in self.transports {
+                if transport.is_loaded() {}
+                transport.move_forward();
+            }
+
             if transport.is_loaded() {
                 transport.move_forward();
             } else {
-                let container = self.containers.iter_mut().find(|c| !(c.location == None || c.is_delivered()));
+                let container = self
+                    .containers
+                    .iter_mut()
+                    .find(|c| !(c.location == None || c.is_delivered()));
                 if let Some(c) = container {
                     transport.load(c, 5, Location::B);
                 }
             }
             transport.move_forward();
             time_elapsed = time_elapsed + 1;
-
         }
         time_elapsed
     }
@@ -97,16 +123,31 @@ impl World {
 
 #[derive(Debug)]
 struct Transport {
+    base: Location,
     distance: u8,
-    load: Option<(Container, u8, Location)>
+    load: Option<(Container, u8, Location)>,
+}
+
+type ContainerId = Uuid;
+
+struct Stuff {
+    destination: Location,
+    remaining_distance: u8,
+    container_id: ContainerId,
+}
+
+enum Transport {
+    Waiting,
+    Loaded(Stuff),
+    ReturningToBase,
 }
 
 impl Transport {
-
     fn new() -> Self {
         Self {
+            base: FACTORY,
             distance: 0,
-            load: None
+            load: None,
         }
     }
 
@@ -116,50 +157,31 @@ impl Transport {
     }
 
     fn is_available(&self) -> bool {
-        return self.distance == 0
+        return self.distance == 0;
     }
 
     fn is_loaded(&self) -> bool {
         return self.load.is_some();
     }
 
-    fn move_forward(&mut self) {
-        match &mut self.load {
-            None => if self.distance > 0 {
-                self.distance = self.distance - 1;
-            },
-            Some((container, d, destination)) => {
-                self.distance = self.distance + 1;
-                // arriving at destination
-                if self.distance == *d {
-                    container.location = Some(destination.clone());
-                    self.load = None;
-                };
+    fn move_forward(self) -> Self {
+        match self.load {
+            None => {
+                if self.distance > 0 {
+                    Transport {
+                        distance: self.distance - 1,
+                        load: self.load,
+                    }
+                } else {
+                    self
+                }
             }
-        };
-
-        // return match self.load {
-        //     None => if self.distance > 0 {
-        //         Transport {
-        //             distance: self.distance - 1,
-        //             load: self.load
-        //         }
-        //     } else {
-        //         self
-        //     },
-        //     Some((_, d)) => {
-        //         let distance = self.distance + 1;
-        //         let load = if distance == d {
-        //             None
-        //         } else {
-        //             self.load
-        //         };
-        //         Transport {
-        //             distance,
-        //             load
-        //         }
-        //     }
-        // }
+            Some((_, d, _)) => {
+                let distance = self.distance + 1;
+                let load = if distance == d { None } else { self.load };
+                Transport { distance, load }
+            }
+        }
     }
 }
 
@@ -237,5 +259,4 @@ mod test {
         assert_eq!(0, transport.distance);
         assert_eq!(false, transport.is_loaded());
     }
-
 }
