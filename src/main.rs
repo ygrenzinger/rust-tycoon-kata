@@ -38,25 +38,36 @@ struct Stuff {
     container_id: ContainerId,
 }
 
+
+
+#[derive(Debug, PartialEq)]
+struct WaitingAt {
+    location: Location,
+}
+
 #[derive(Debug, PartialEq)]
 enum Transport {
-    Waiting,
+    Waiting(WaitingAt),
     // Distance Restante, InTransitContainer
     Loaded(u8, InTransitContainer),
     ReturningToBase(u8),
 }
 
 impl Transport {
-    fn new() -> Self {
-        Self::Waiting
+    fn new(location: Location) -> Self {
+        Self::Waiting(WaitingAt { location: location })
     }
 
-    fn load_container(self, container: FixedContainer) -> Transport {
+    fn to_name(self, container: FixedContainer) -> Transport {
         match self {
-            Transport::Waiting => Transport::Loaded(5, InTransitContainer { id: container.id }),
+            Transport::Waiting(at) => Transport::load_container(at, container),
             Transport::Loaded(_, _) => panic!("I am FULL !"),
             Transport::ReturningToBase(_) => panic!("Can't load your stuff, yet."),
         }
+    } 
+
+    fn load_container(transport: WaitingAt, container: FixedContainer) -> Transport {
+        return Transport::Loaded(5, InTransitContainer { id: container.id });
     } 
 }
 
@@ -98,8 +109,21 @@ impl World {
                 .into_iter()
                 .map(|dest| Container::new(Uuid::new_v4(), dest))
                 .collect(),
-            transports: vec![Transport::new(), Transport::new()],
+            transports: vec![Transport::new(Location::FACTORY), Transport::new(Location::FACTORY)],
         }
+    }
+
+    fn tick(self) -> Self {
+        // TODO : double loop .... iter container inside transport
+        /*
+        let transports = self.transports.into_iter().map(|transport| => {
+            Transport::Waiting(at) => Transport::load_container(at, container),
+            _ => transport
+        })
+        World {
+            containers: 
+        }
+         */
     }
 
     fn deliver_containers(&mut self) -> usize {
@@ -230,16 +254,29 @@ mod test {
 
     #[test]
     fn should_create_transport_in_waiting_state() {
-        let transport = Transport::new();
-        assert_eq!(transport, Transport::Waiting);
+        let transport = Transport::new(Location::FACTORY);
+        assert_eq!(transport, Transport::Waiting(WaitingAt { location: Location::FACTORY }));
     }
 
     #[test]
     fn should_load_a_container_into_the_transport() {
         let uuid = Uuid::new_v4();
-        let transport = Transport::new();
+        let transport = Transport::new(Location::FACTORY);
         let container: FixedContainer = FixedContainer { id: uuid };
 
-        assert_eq!(transport.load_container(container), Transport::Loaded(5, InTransitContainer { id: uuid }));
+        assert_eq!(transport.to_name(container), Transport::Loaded(5, InTransitContainer { id: uuid }));
+    }
+
+    #[test]
+    fn should_load_waiting_container_into_waiting_transports() {
+        let world = World::new(vec![B, B]);
+        let world = world.tick();
+        
+        assert!(world.transports.into_iter().all(|transport| {
+            match transport {
+                Transport::Loaded(_, _) => true,
+                _ => false
+            }
+        } ))
     }
 }
