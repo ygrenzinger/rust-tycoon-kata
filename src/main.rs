@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use uuid::Uuid;
 
 use crate::Location::{B, FACTORY};
@@ -6,7 +7,7 @@ fn main() {
     println!("Hello, world!");
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
 enum Location {
     FACTORY,
     A,
@@ -94,7 +95,7 @@ impl Container {
 }
 
 struct World {
-    containers: Vec<Container>,
+    locations: HashMap<Location, Vec<Container>>,
     transports: Vec<Transport>,
 }
 
@@ -104,26 +105,69 @@ impl World {
     // Factory -> B
 
     fn new(destinations: Vec<Location>) -> Self {
+        let containers = destinations
+            .into_iter()
+            .map(|dest| Container::new(Uuid::new_v4(), dest))
+            .collect();
+        let mut locations = HashMap::new();
+        locations.insert(FACTORY, containers);
         Self {
-            containers: destinations
-                .into_iter()
-                .map(|dest| Container::new(Uuid::new_v4(), dest))
-                .collect(),
+            locations: locations,
             transports: vec![Transport::new(Location::FACTORY), Transport::new(Location::FACTORY)],
         }
     }
 
-    fn tick(self) -> Self {
-        // TODO : double loop .... iter container inside transport
-        /*
-        let transports = self.transports.into_iter().map(|transport| => {
-            Transport::Waiting(at) => Transport::load_container(at, container),
-            _ => transport
-        })
-        World {
-            containers: 
+    fn manageTransport(self, transport: Transport) -> Self {
+        let mut transports = self.transports;
+        match &transport {
+            Transport::Waiting(at) => {
+                match self.locations.get(&at.location) {
+                    Some(containers) => {
+                        match containers.first() {
+                            Some(container) => {
+                                // self.locations.
+                                transports.push(transport);
+                                World {
+                                    transports,
+                                    locations: self.locations
+                                }
+                            },
+                            _ => {
+                                transports.push(transport);
+                                World {
+                                    transports,
+                                    locations: self.locations
+                                }
+                            }
+                        }
+                    },
+                    _ => {
+                        transports.push(transport);
+                        World {
+                            transports,
+                            locations: self.locations
+                        }
+                    }
+                }
+                // Transport::load_container(at, container)
+            },
+            _ => {
+                transports.push(transport);
+                World {
+                    transports,
+                    locations: self.locations
+                }
+            }
         }
-         */
+    }
+
+    fn tick(self) -> Self {
+        self.transports.into_iter().fold(World {
+            locations: self.locations,
+            transports: vec![]
+        }, |world, transport| {
+            world.manageTransport(transport)
+        })
     }
 
     fn deliver_containers(&mut self) -> usize {
