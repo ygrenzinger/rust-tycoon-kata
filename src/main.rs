@@ -39,14 +39,12 @@ struct Stuff {
     container_id: ContainerId,
 }
 
-
-
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 struct WaitingAt {
     location: Location,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 enum Transport {
     Waiting(WaitingAt),
     // Distance Restante, InTransitContainer
@@ -65,24 +63,24 @@ impl Transport {
             Transport::Loaded(_, _) => panic!("I am FULL !"),
             Transport::ReturningToBase(_) => panic!("Can't load your stuff, yet."),
         }
-    } 
+    }
 
     fn load_container(transport: WaitingAt, container: FixedContainer) -> Transport {
         return Transport::Loaded(5, InTransitContainer { id: container.id });
-    } 
+    }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 struct InTransitContainer {
     id: Uuid,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct FixedContainer {
     id: Uuid,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 enum Container {
     InTransit(InTransitContainer),
     At(FixedContainer),
@@ -92,10 +90,19 @@ impl Container {
     fn new(id: Uuid, destination: Location) -> Self {
         Self::At(FixedContainer { id })
     }
+
+    fn id(&self) -> Uuid {
+        match self {
+            Self::InTransit(c) => c.id,
+            Self::At(c) => c.id,
+        }
+    }
 }
 
+#[derive(Debug)]
 struct World {
-    locations: HashMap<Location, Vec<Container>>,
+    // idle containers in a known location (not in a transport)
+    fixed_containers: HashMap<Location, Vec<Container>>,
     transports: Vec<Transport>,
 }
 
@@ -109,11 +116,14 @@ impl World {
             .into_iter()
             .map(|dest| Container::new(Uuid::new_v4(), dest))
             .collect();
-        let mut locations = HashMap::new();
-        locations.insert(FACTORY, containers);
+        let mut fixed_containers = HashMap::new();
+        fixed_containers.insert(FACTORY, containers);
         Self {
-            locations: locations,
-            transports: vec![Transport::new(Location::FACTORY), Transport::new(Location::FACTORY)],
+            fixed_containers: fixed_containers,
+            transports: vec![
+                Transport::new(Location::FACTORY),
+                Transport::new(Location::FACTORY),
+            ],
         }
     }
 
@@ -121,53 +131,65 @@ impl World {
         let mut transports = self.transports;
         match &transport {
             Transport::Waiting(at) => {
-                match self.locations.get(&at.location) {
+                let mut new_fixed_containers = self.fixed_containers.clone();
+                match self.fixed_containers.get(&at.location) {
                     Some(containers) => {
-                        match containers.first() {
+                        let mut remaining_containers = containers.clone().into_iter();
+
+                        match remaining_containers.next() {
                             Some(container) => {
-                                // self.locations.
-                                transports.push(transport);
+                                let destination = 5; // todo: plz
+
+                                transports.push(Transport::Loaded(
+                                    destination,
+                                    InTransitContainer { id: container.id() },
+                                ));
+
+                                new_fixed_containers
+                                    .insert(at.location.clone(), remaining_containers.collect());
+
                                 World {
                                     transports,
-                                    locations: self.locations
+                                    fixed_containers: new_fixed_containers,
                                 }
-                            },
+                            }
                             _ => {
                                 transports.push(transport);
                                 World {
                                     transports,
-                                    locations: self.locations
+                                    fixed_containers: self.fixed_containers,
                                 }
                             }
                         }
-                    },
+                    }
                     _ => {
                         transports.push(transport);
                         World {
                             transports,
-                            locations: self.locations
+                            fixed_containers: self.fixed_containers,
                         }
                     }
                 }
                 // Transport::load_container(at, container)
-            },
+            }
             _ => {
                 transports.push(transport);
                 World {
                     transports,
-                    locations: self.locations
+                    fixed_containers: self.fixed_containers,
                 }
             }
         }
     }
 
     fn tick(self) -> Self {
-        self.transports.into_iter().fold(World {
-            locations: self.locations,
-            transports: vec![]
-        }, |world, transport| {
-            world.manageTransport(transport)
-        })
+        self.transports.into_iter().fold(
+            World {
+                fixed_containers: self.fixed_containers,
+                transports: vec![],
+            },
+            |world, transport| world.manageTransport(transport),
+        )
     }
 
     fn deliver_containers(&mut self) -> usize {
@@ -210,7 +232,6 @@ impl World {
 //     distance: u8,
 //     load: Option<(Container, u8, Location)>,
 // }
-
 
 // impl Transport {
 //     fn new() -> Self {
@@ -299,7 +320,12 @@ mod test {
     #[test]
     fn should_create_transport_in_waiting_state() {
         let transport = Transport::new(Location::FACTORY);
-        assert_eq!(transport, Transport::Waiting(WaitingAt { location: Location::FACTORY }));
+        assert_eq!(
+            transport,
+            Transport::Waiting(WaitingAt {
+                location: Location::FACTORY
+            })
+        );
     }
 
     #[test]
@@ -308,19 +334,24 @@ mod test {
         let transport = Transport::new(Location::FACTORY);
         let container: FixedContainer = FixedContainer { id: uuid };
 
-        assert_eq!(transport.to_name(container), Transport::Loaded(5, InTransitContainer { id: uuid }));
+        assert_eq!(
+            transport.to_name(container),
+            Transport::Loaded(5, InTransitContainer { id: uuid })
+        );
     }
 
     #[test]
     fn should_load_waiting_container_into_waiting_transports() {
         let world = World::new(vec![B, B]);
         let world = world.tick();
-        
+
+        dbg!(&world);
+
         assert!(world.transports.into_iter().all(|transport| {
             match transport {
                 Transport::Loaded(_, _) => true,
-                _ => false
+                _ => false,
             }
-        } ))
+        }))
     }
 }
