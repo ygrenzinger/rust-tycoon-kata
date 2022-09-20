@@ -57,11 +57,11 @@ impl Transport {
         Self::Waiting(WaitingAt { location: location })
     }
 
-    fn to_name(self, container: FixedContainer) -> Transport {
+    fn to_name(self, container: FixedContainer) -> Result<Transport, String> {
         match self {
-            Transport::Waiting(at) => Transport::load_container(at, container),
-            Transport::Loaded(_, _) => panic!("I am FULL !"),
-            Transport::ReturningToBase(_) => panic!("Can't load your stuff, yet."),
+            Transport::Waiting(at) => Ok(Transport::load_container(at, container)),
+            Transport::Loaded(_, _) => Err("I am FULL !".to_string()),
+            Transport::ReturningToBase(_) => Err("Can't load your stuff, yet.".to_string()),
         }
     }
 
@@ -336,7 +336,7 @@ mod test {
 
         assert_eq!(
             transport.to_name(container),
-            Transport::Loaded(5, InTransitContainer { id: uuid })
+            Ok(Transport::Loaded(5, InTransitContainer { id: uuid }))
         );
     }
 
