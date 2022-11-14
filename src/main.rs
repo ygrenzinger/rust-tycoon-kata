@@ -1,4 +1,3 @@
-use std::collections::VecDeque;
 
 enum Destination {
     A,
@@ -10,16 +9,17 @@ struct Container {
     is_delivered: bool,
 }
 
+#[derive(Clone)]
 enum Transport {
-    Empty,
+    Waiting,
     ReturningToBase {
-        distanceFromBase: u8,
+        distance_from_base: u8,
     },
     Shipping {
         container: Container,
         destination: Destination,
-        distanceToTravel: u8,
-        distanceFromBase: u8,
+        distance_to_travel: u8,
+        distance_from_base: u8,
     },
 }
 
@@ -45,12 +45,36 @@ impl DeliverySystem {
     }
 
     fn tick(self) -> DeliverySystem {
-        // map through Destination checking if transport
+        // map through Destination checking if transport is at destination
+        let mut new_transports: Vec<Transport> = vec![];
+        let new_containers: Vec<Container> = self.containers;
+
+        for transport in self.transports.iter() {
+            let (new_transport, new_containers) = self.tick_transport(transport, new_containers);
+            new_transports.push(new_transport);
+        }
+
         DeliverySystem {
-            containers: self.containers,
-            transports: self.transports,
+            containers: new_containers,
+            transports: new_transports,
             tick: self.tick + 1,
         }
+    }
+
+    fn tick_transport(self, transport: &Transport, containers: Vec<Container>) -> (Transport, Vec<Container>) {
+        let new_transport = match transport {
+            &Transport::Waiting => {
+                let container = containers.pop();
+                if let Some(container) = container {
+                    Transport::Shipping { container: container, destination: container.destination, distance_to_travel: 5, distance_from_base: 0 } 
+                } else {
+                    transport.clone()
+                }
+            },
+            &Transport::Shipping {..} => transport.clone(), // TODO : implements the thing that we discussed last week, if you remembered....
+            &Transport::ReturningToBase {..} => transport.clone(),
+        };
+        (new_transport, containers) 
     }
 
     fn all_are_delivered(&self) -> bool {
@@ -66,7 +90,7 @@ impl DeliverySystem {
 
 fn run(containers: Vec<Destination>) -> u32 {
     let mut delivery_system =
-        DeliverySystem::new(containers, vec![Transport::Empty, Transport::Empty]);
+        DeliverySystem::new(containers, vec![Transport::Waiting, Transport::Waiting]);
 
     while !delivery_system.all_are_delivered() {
         delivery_system = delivery_system.tick();
