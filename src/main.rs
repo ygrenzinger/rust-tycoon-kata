@@ -1,9 +1,10 @@
-
+#[derive(Clone)]
 enum Destination {
     A,
     B,
 }
 
+#[derive(Clone)]
 struct Container {
     destination: Destination,
     is_delivered: bool,
@@ -21,6 +22,30 @@ enum Transport {
         distance_to_travel: u8,
         distance_from_base: u8,
     },
+}
+
+impl Transport {
+    fn tick(self, containers: Vec<Container>) -> (Transport, Vec<Container>) {
+        match self {
+            Transport::Waiting => {
+                if let Some((container, rest)) = containers.clone().split_first() {
+                    (
+                        Transport::Shipping {
+                            container: container.clone(),
+                            destination: container.destination.clone(),
+                            distance_to_travel: 5,
+                            distance_from_base: 0,
+                        },
+                        rest.to_vec(),
+                    )
+                } else {
+                    (self, containers)
+                }
+            }
+            Transport::Shipping { .. } => (self, containers), // TODO : implements the thing that we discussed last week, if you remembered....
+            Transport::ReturningToBase { .. } => (self, containers),
+        }
+    }
 }
 
 struct DeliverySystem {
@@ -47,11 +72,12 @@ impl DeliverySystem {
     fn tick(self) -> DeliverySystem {
         // map through Destination checking if transport is at destination
         let mut new_transports: Vec<Transport> = vec![];
-        let new_containers: Vec<Container> = self.containers;
+        let mut new_containers: Vec<Container> = self.containers;
 
-        for transport in self.transports.iter() {
-            let (new_transport, new_containers) = self.tick_transport(transport, new_containers);
+        for transport in self.transports.into_iter() {
+            let (new_transport, next_containers) = transport.tick(new_containers.clone());
             new_transports.push(new_transport);
+            new_containers = next_containers;
         }
 
         DeliverySystem {
@@ -59,22 +85,6 @@ impl DeliverySystem {
             transports: new_transports,
             tick: self.tick + 1,
         }
-    }
-
-    fn tick_transport(self, transport: &Transport, containers: Vec<Container>) -> (Transport, Vec<Container>) {
-        let new_transport = match transport {
-            &Transport::Waiting => {
-                let container = containers.pop();
-                if let Some(container) = container {
-                    Transport::Shipping { container: container, destination: container.destination, distance_to_travel: 5, distance_from_base: 0 } 
-                } else {
-                    transport.clone()
-                }
-            },
-            &Transport::Shipping {..} => transport.clone(), // TODO : implements the thing that we discussed last week, if you remembered....
-            &Transport::ReturningToBase {..} => transport.clone(),
-        };
-        (new_transport, containers) 
     }
 
     fn all_are_delivered(&self) -> bool {
