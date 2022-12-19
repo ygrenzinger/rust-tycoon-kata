@@ -11,34 +11,6 @@ struct Container {
 }
 
 #[derive(Clone, Debug)]
-enum Transport {
-    Waiting,
-    ReturningToBase {
-        distance_from_base: u8,
-    },
-    Shipping {
-        container: Container,
-        destination: Destination,
-        distance_to_travel: u8,
-        distance_from_base: u8,
-    },
-}
-
-trait TransportTrait {
-    fn tick(self, containers: Vec<Container>) -> (Box<dyn TransportTrait>, Vec<Container>);
-}
-
-struct TransportWaiting;
-
-impl TransportTrait for TransportWaiting {
-    fn tick(self, containers: Vec<Container>) -> (Box<dyn TransportTrait>, Vec<Container>) {
-        return (Box::new(self), containers);
-    }
-}
-
-struct TransportReturningToBase {
-    distance_from_base: u8,
-}
 struct TransportShipping {
     container: Container,
     destination: Destination,
@@ -46,65 +18,99 @@ struct TransportShipping {
     distance_from_base: u8,
 }
 
+#[derive(Clone, Debug)]
+struct TransportReturningToBase {
+    distance_from_base: u8,
+}
+
+#[derive(Clone, Debug)]
+enum Transport {
+    Waiting,
+    ReturningToBase(TransportReturningToBase),
+    Shipping(TransportShipping),
+}
+
 impl Transport {
-    fn tick(self, mut containers: Vec<Container>) -> (Transport, Vec<Container>) {
-        match self {
-            Transport::Waiting => {
-                if let Some((container, rest)) = containers.clone().split_first() {
-                    if !container.is_delivered {
-                        (
-                            Transport::Shipping {
-                                container: container.clone(),
-                                destination: container.destination.clone(),
-                                distance_to_travel: 5,
-                                distance_from_base: 1,
-                            },
-                            rest.to_vec(),
-                        )
-                    } else {
-                        (self, containers)
-                    }
-                } else {
-                    (self, containers)
-                }
-            }
-            Transport::Shipping {
-                container,
-                destination,
-                distance_from_base,
-                distance_to_travel,
-            } => {
-                if distance_from_base + 1 == distance_to_travel {
-                    let transport = Transport::ReturningToBase {
-                        distance_from_base: distance_from_base,
-                    };
-                    let container = Container {
-                        destination,
-                        is_delivered: true,
-                    };
-                    containers.push(container);
-                    (transport, containers)
-                } else {
-                    (
-                        Transport::Shipping {
-                            container,
-                            destination,
-                            distance_from_base: distance_from_base + 1,
-                            distance_to_travel,
-                        },
-                        containers,
-                    )
-                }
-            }
-            Transport::ReturningToBase { distance_from_base } => {
-                let transport = if distance_from_base == 0 {
-                    Transport::Waiting
-                } else {
-                    Transport::ReturningToBase {
-                        distance_from_base: distance_from_base - 1,
-                    }
-                };
+    fn tick_waiting_transport(
+        transport: Transport,
+        containers: Vec<Container>,
+    ) -> (Transport, Vec<Container>) {
+        if let Some((container, rest)) = containers.clone().split_first() {
+            if !container.is_delivered {
+                (
+                    Transport::Shipping(TransportShipping {
+                        container: container.clone(),
+                        destination: container.destination.clone(),
+                        distance_to_travel: 5,
+                        distance_from_base: 1,
+                    }),
+                    rest.to_vec(),
+                )
+            } else {
                 (transport, containers)
+            }
+        } else {
+            (transport, containers)
+        }
+    }
+
+    fn moving_loaded_transport(
+        transport: TransportShipping,
+        containers: Vec<Container>,
+    ) -> (Transport, Vec<Container>) {
+        (
+            Transport::Shipping(TransportShipping {
+                container: transport.container,
+                destination: transport.destination,
+                distance_from_base: transport.distance_from_base + 1,
+                distance_to_travel: transport.distance_to_travel,
+            }),
+            containers,
+        )
+    }
+
+    fn delivering(
+        transport: TransportShipping,
+        mut containers: Vec<Container>,
+    ) -> (Transport, Vec<Container>) {
+        let returning_to_base = Transport::ReturningToBase(TransportReturningToBase {
+            distance_from_base: transport.distance_from_base,
+        });
+        let container = Container {
+            destination: transport.destination,
+            is_delivered: true,
+        };
+        containers.push(container);
+        (returning_to_base, containers)
+    }
+
+    fn returning_to_base(
+        transport: TransportReturningToBase,
+        containers: Vec<Container>,
+    ) -> (Transport, Vec<Container>) {
+        let transport = if transport.distance_from_base == 0 {
+            Transport::Waiting
+        } else {
+            Transport::ReturningToBase(TransportReturningToBase {
+                distance_from_base: transport.distance_from_base - 1,
+            })
+        };
+        (transport, containers)
+    }
+
+    fn tick(self, containers: Vec<Container>) -> (Transport, Vec<Container>) {
+        match self {
+            Transport::Waiting => Transport::tick_waiting_transport(self, containers),
+            Transport::Shipping(transport)
+                if transport.distance_from_base + 1 == transport.distance_to_travel =>
+            {
+                Transport::delivering(transport, containers)
+            }
+            Transport::Shipping(transport) => {
+                Transport::moving_loaded_transport(transport, containers)
+            }
+            Transport::ReturningToBase(transport) => {
+                Transport::returning_to_base(transport, containers)
             }
         }
     }
