@@ -73,8 +73,17 @@ impl Transport {
                         containers,
                     )
                 }
-            } // TODO : implements the thing that we discussed last week, if you remembered....
-            Transport::ReturningToBase { .. } => (self, containers),
+            }
+            Transport::ReturningToBase { distance_from_base } => {
+                let transport = if distance_from_base == 0 {
+                    Transport::Waiting
+                } else {
+                    Transport::ReturningToBase {
+                        distance_from_base: distance_from_base - 1,
+                    }
+                };
+                (transport, containers)
+            }
         }
     }
 }
@@ -157,12 +166,12 @@ fn test_scenario_1() {
     assert_eq!(5, run(vec![Destination::B]));
 }
 
-// #[test]
+#[test]
 fn test_scenario_2() {
     assert_eq!(5, run(vec![Destination::B, Destination::B]));
 }
 
-// #[test]
+#[test]
 fn test_scenario_3() {
     assert_eq!(
         15,
