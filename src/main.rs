@@ -24,6 +24,28 @@ enum Transport {
     },
 }
 
+trait TransportTrait {
+    fn tick(self, containers: Vec<Container>) -> (Box<dyn TransportTrait>, Vec<Container>);
+}
+
+struct TransportWaiting;
+
+impl TransportTrait for TransportWaiting {
+    fn tick(self, containers: Vec<Container>) -> (Box<dyn TransportTrait>, Vec<Container>) {
+        return (Box::new(self), containers);
+    }
+}
+
+struct TransportReturningToBase {
+    distance_from_base: u8,
+}
+struct TransportShipping {
+    container: Container,
+    destination: Destination,
+    distance_to_travel: u8,
+    distance_from_base: u8,
+}
+
 impl Transport {
     fn tick(self, mut containers: Vec<Container>) -> (Transport, Vec<Container>) {
         match self {
