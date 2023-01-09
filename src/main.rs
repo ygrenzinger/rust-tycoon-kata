@@ -5,8 +5,15 @@ enum Destination {
 }
 
 #[derive(Clone, Debug)]
+struct Segment {
+    destination: Destination,
+    distance: u8,
+}
+
+#[derive(Clone, Debug)]
 struct Container {
     destination: Destination,
+    roadmap: Vec<Segment>,
     is_delivered: bool,
 }
 
@@ -41,7 +48,7 @@ impl Transport {
                     Transport::Shipping(TransportShipping {
                         container: container.clone(),
                         destination: container.destination.clone(),
-                        distance_to_travel: 5,
+                        distance_to_travel: container.roadmap[0].distance,
                         distance_from_base: 1,
                     }),
                     rest.to_vec(),
@@ -78,6 +85,7 @@ impl Transport {
         });
         let container = Container {
             destination: transport.destination,
+            roadmap: vec![],
             is_delivered: true,
         };
         containers.push(container);
@@ -129,6 +137,12 @@ impl DeliverySystem {
                 .into_iter()
                 .map(|destination| Container {
                     destination,
+                    roadmap: vec![
+                        Segment {
+                            destination: Destination::B,
+                            distance: 5,
+                        }
+                    ],
                     is_delivered: false,
                 })
                 .collect(),
