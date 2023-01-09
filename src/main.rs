@@ -2,6 +2,17 @@
 enum Destination {
     A,
     B,
+    PORT, //TODO : To remove later
+}
+
+impl Destination {
+    fn to_roadmap(self) -> Vec<Segment> {
+        match self {
+            Destination::B => vec![Segment { destination: Destination::B, distance: 5 }],
+            Destination::A => vec![Segment { destination: Destination::PORT, distance: 1 }, Segment { destination: Destination::A, distance: 4 }],
+            Destination::PORT => vec![Segment { destination: Destination::PORT, distance: 1 }],
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -44,6 +55,7 @@ impl Transport {
     ) -> (Transport, Vec<Container>) {
         if let Some((container, rest)) = containers.clone().split_first() {
             if !container.is_delivered {
+                println!("{}", container.roadmap[0].distance);
                 (
                     Transport::Shipping(TransportShipping {
                         container: container.clone(),
@@ -136,13 +148,8 @@ impl DeliverySystem {
             containers: destinations
                 .into_iter()
                 .map(|destination| Container {
-                    destination,
-                    roadmap: vec![
-                        Segment {
-                            destination: Destination::B,
-                            distance: 5,
-                        }
-                    ],
+                    destination: destination.clone(),
+                    roadmap: destination.to_roadmap(),
                     is_delivered: false,
                 })
                 .collect(),
@@ -178,10 +185,10 @@ impl DeliverySystem {
             .iter()
             .all(|container| container.is_delivered);
 
-        dbg!(&self.transports);
-        dbg!(&self.containers);
+        //dbg!(&self.transports);
+        //dbg!(&self.containers);
 
-        println!("any_transport_shipping {any_transport_shipping} all_containers_delivered {all_containers_delivered} ");
+        //println!("any_transport_shipping {any_transport_shipping} all_containers_delivered {all_containers_delivered} ");
         !any_transport_shipping && all_containers_delivered
     }
 
@@ -219,4 +226,12 @@ fn test_scenario_3() {
         15,
         run(vec![Destination::B, Destination::B, Destination::B])
     );
+}
+
+#[test]
+fn test_scenario_4() {
+    assert_eq!(
+        11,
+        run(vec![Destination::B, Destination::B, Destination::PORT])
+    )
 }
