@@ -8,9 +8,24 @@ enum Destination {
 impl Destination {
     fn to_roadmap(self) -> Vec<Segment> {
         match self {
-            Destination::B => vec![Segment { destination: Destination::B, distance: 5 }],
-            Destination::A => vec![Segment { destination: Destination::PORT, distance: 1 }, Segment { destination: Destination::A, distance: 4 }],
-            Destination::PORT => vec![Segment { destination: Destination::PORT, distance: 1 }],
+            Destination::B => vec![Segment {
+                destination: Destination::B,
+                distance: 5,
+            }],
+            Destination::A => vec![
+                Segment {
+                    destination: Destination::PORT,
+                    distance: 1,
+                },
+                Segment {
+                    destination: Destination::A,
+                    distance: 4,
+                },
+            ],
+            Destination::PORT => vec![Segment {
+                destination: Destination::PORT,
+                distance: 1,
+            }],
         }
     }
 }
@@ -55,16 +70,18 @@ impl Transport {
     ) -> (Transport, Vec<Container>) {
         if let Some((container, rest)) = containers.clone().split_first() {
             if !container.is_delivered {
-                println!("{}", container.roadmap[0].distance);
-                (
-                    Transport::Shipping(TransportShipping {
-                        container: container.clone(),
-                        destination: container.destination.clone(),
-                        distance_to_travel: container.roadmap[0].distance,
-                        distance_from_base: 1,
-                    }),
-                    rest.to_vec(),
-                )
+                let distance_to_travel = container.roadmap[0].distance;
+                let transport = TransportShipping {
+                    container: container.clone(),
+                    destination: container.destination.clone(),
+                    distance_to_travel,
+                    distance_from_base: 1,
+                };
+                if distance_to_travel == 1 {
+                    Transport::delivering(transport, rest.to_vec())
+                } else {
+                    (Transport::Shipping(transport), rest.to_vec())
+                }
             } else {
                 (transport, containers)
             }
@@ -119,6 +136,7 @@ impl Transport {
     }
 
     fn tick(self, containers: Vec<Container>) -> (Transport, Vec<Container>) {
+        // dbg!(&self);
         match self {
             Transport::Waiting => Transport::tick_waiting_transport(self, containers),
             Transport::Shipping(transport)
