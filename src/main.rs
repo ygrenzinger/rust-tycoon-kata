@@ -1,29 +1,33 @@
-#[derive(Clone, Debug)]
-enum Destination {
+use std::vec;
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+enum Location {
+    FACTORY,
+    PORT,
     A,
     B,
-    PORT, //TODO : To remove later
 }
 
-impl Destination {
+impl Location {
     fn to_roadmap(self) -> Vec<Segment> {
         match self {
-            Destination::B => vec![Segment {
-                destination: Destination::B,
+            Location::FACTORY => vec![],
+            Location::B => vec![Segment {
+                destination: Location::B,
                 distance: 5,
             }],
-            Destination::A => vec![
+            Location::A => vec![
                 Segment {
-                    destination: Destination::PORT,
+                    destination: Location::PORT,
                     distance: 1,
                 },
                 Segment {
-                    destination: Destination::A,
+                    destination: Location::A,
                     distance: 4,
                 },
             ],
-            Destination::PORT => vec![Segment {
-                destination: Destination::PORT,
+            Location::PORT => vec![Segment {
+                destination: Location::PORT,
                 distance: 1,
             }],
         }
@@ -32,13 +36,14 @@ impl Destination {
 
 #[derive(Clone, Debug)]
 struct Segment {
-    destination: Destination,
+    destination: Location,
     distance: u8,
 }
 
 #[derive(Clone, Debug)]
 struct Container {
-    destination: Destination,
+    location: Option<Location>,
+    destination: Location,
     roadmap: Vec<Segment>,
     is_delivered: bool,
 }
@@ -46,7 +51,7 @@ struct Container {
 #[derive(Clone, Debug)]
 struct TransportShipping {
     container: Container,
-    destination: Destination,
+    destination: Location,
     distance_to_travel: u8,
     distance_from_base: u8,
 }
@@ -58,7 +63,7 @@ struct TransportReturningToBase {
 
 #[derive(Clone, Debug)]
 enum Transport {
-    Waiting,
+    Waiting, // TODO : should contain Base to manage the relation  between transport base and container location
     ReturningToBase(TransportReturningToBase),
     Shipping(TransportShipping),
 }
@@ -71,9 +76,10 @@ impl Transport {
         if let Some((container, rest)) = containers.clone().split_first() {
             if !container.is_delivered {
                 let distance_to_travel = container.roadmap[0].distance;
+                let destination = container.roadmap[0].destination;
                 let transport = TransportShipping {
                     container: container.clone(),
-                    destination: container.destination.clone(),
+                    destination,
                     distance_to_travel,
                     distance_from_base: 1,
                 };
@@ -109,13 +115,16 @@ impl Transport {
         transport: TransportShipping,
         mut containers: Vec<Container>,
     ) -> (Transport, Vec<Container>) {
+        let location = transport.destination.clone();
         let returning_to_base = Transport::ReturningToBase(TransportReturningToBase {
             distance_from_base: transport.distance_from_base,
         });
+        let remaining_roadmap = &transport.container.roadmap[1..];
         let container = Container {
-            destination: transport.destination,
-            roadmap: vec![],
-            is_delivered: true,
+            location: Some(location),
+            destination: transport.container.destination,
+            roadmap: remaining_roadmap.to_vec(),
+            is_delivered: location == transport.container.destination,
         };
         containers.push(container);
         (returning_to_base, containers)
@@ -136,7 +145,8 @@ impl Transport {
     }
 
     fn tick(self, containers: Vec<Container>) -> (Transport, Vec<Container>) {
-        // dbg!(&self);
+        dbg!(&self);
+        dbg!(&containers);
         match self {
             Transport::Waiting => Transport::tick_waiting_transport(self, containers),
             Transport::Shipping(transport)
@@ -161,11 +171,12 @@ struct DeliverySystem {
 }
 
 impl DeliverySystem {
-    fn new(destinations: Vec<Destination>, transports: Vec<Transport>) -> DeliverySystem {
+    fn new(destinations: Vec<Location>, transports: Vec<Transport>) -> DeliverySystem {
         DeliverySystem {
             containers: destinations
                 .into_iter()
                 .map(|destination| Container {
+                    location: Some(Location::FACTORY),
                     destination: destination.clone(),
                     roadmap: destination.to_roadmap(),
                     is_delivered: false,
@@ -180,6 +191,8 @@ impl DeliverySystem {
         // map through Destination checking if transport is at destination
         let mut new_transports: Vec<Transport> = vec![];
         let mut new_containers: Vec<Container> = self.containers;
+        println!("");
+        println!("tickkiiingggg");
         for transport in self.transports.into_iter() {
             let (new_transport, next_containers) = transport.tick(new_containers.clone());
             new_transports.push(new_transport);
@@ -215,7 +228,7 @@ impl DeliverySystem {
     }
 }
 
-fn run(containers: Vec<Destination>) -> u32 {
+fn run(containers: Vec<Location>) -> u32 {
     let mut delivery_system =
         DeliverySystem::new(containers, vec![Transport::Waiting, Transport::Waiting]);
     while !delivery_system.all_are_delivered() {
@@ -225,31 +238,30 @@ fn run(containers: Vec<Destination>) -> u32 {
 }
 
 fn main() {
-    run(vec![Destination::B]);
+    run(vec![Location::B]);
 }
 
 #[test]
 fn test_scenario_1() {
-    assert_eq!(5, run(vec![Destination::B]));
+    assert_eq!(5, run(vec![Location::B]));
 }
 
 #[test]
 fn test_scenario_2() {
-    assert_eq!(5, run(vec![Destination::B, Destination::B]));
+    assert_eq!(5, run(vec![Location::B, Location::B]));
 }
 
 #[test]
 fn test_scenario_3() {
-    assert_eq!(
-        15,
-        run(vec![Destination::B, Destination::B, Destination::B])
-    );
+    assert_eq!(15, run(vec![Location::B, Location::B, Location::B]));
 }
 
 #[test]
 fn test_scenario_4() {
-    assert_eq!(
-        11,
-        run(vec![Destination::B, Destination::B, Destination::PORT])
-    )
+    assert_eq!(11, run(vec![Location::B, Location::B, Location::PORT]))
+}
+
+#[test]
+fn test_scenario_5() {
+    assert_eq!(5, run(vec![Location::A]))
 }
