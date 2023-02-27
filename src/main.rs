@@ -71,9 +71,10 @@ enum Transport {
 impl Transport {
     fn tick_waiting_transport(
         transport: Transport,
-        containers: Vec<Container>,
-    ) -> (Transport, Vec<Container>) {
-        if let Some((container, rest)) = containers.clone().split_first() {
+        waitingContainers: Vec<Container>,
+        unloadedContainers: Vec<Container>,
+    ) -> (Transport, Vec<Container>, Vec<Container>) {
+        if let Some((container, rest)) = waitingContainers.clone().split_first() {
             if !container.is_delivered {
                 let distance_to_travel = container.roadmap[0].distance;
                 let destination = container.roadmap[0].destination;
@@ -84,15 +85,19 @@ impl Transport {
                     distance_from_base: 1,
                 };
                 if distance_to_travel == 1 {
-                    Transport::delivering(transport, rest.to_vec())
+                    Transport::delivering(transport, rest.to_vec(), unloadedContainers)
                 } else {
-                    (Transport::Shipping(transport), rest.to_vec())
+                    (
+                        Transport::Shipping(transport),
+                        rest.to_vec(),
+                        unloadedContainers,
+                    )
                 }
             } else {
-                (transport, containers)
+                (transport, waitingContainers, unloadedContainers)
             }
         } else {
-            (transport, containers)
+            (transport, waitingContainers, unloadedContainers)
         }
     }
 
@@ -113,8 +118,9 @@ impl Transport {
 
     fn delivering(
         transport: TransportShipping,
-        mut containers: Vec<Container>,
-    ) -> (Transport, Vec<Container>) {
+        waitingContainers: Vec<Container>,
+        mut unloadContainers: Vec<Container>,
+    ) -> (Transport, Vec<Container>, Vec<Container>) {
         let location = transport.destination.clone();
         let returning_to_base = Transport::ReturningToBase(TransportReturningToBase {
             distance_from_base: transport.distance_from_base,
@@ -126,8 +132,8 @@ impl Transport {
             roadmap: remaining_roadmap.to_vec(),
             is_delivered: location == transport.container.destination,
         };
-        containers.push(container);
-        (returning_to_base, containers)
+        unloadContainers.push(container);
+        (returning_to_base, waitingContainers, unloadContainers)
     }
 
     fn returning_to_base(
@@ -144,21 +150,33 @@ impl Transport {
         (transport, containers)
     }
 
-    fn tick(self, containers: Vec<Container>) -> (Transport, Vec<Container>) {
-        dbg!(&self);
-        dbg!(&containers);
+    fn tick(
+        self,
+        waitingContainers: Vec<Container>,
+        unloadedContainers: Vec<Container>,
+    ) -> (Transport, Vec<Container>, Vec<Container>) {
         match self {
-            Transport::Waiting => Transport::tick_waiting_transport(self, containers),
+            // Load and move 1 distance if available containers
+            Transport::Waiting => {
+                Transport::tick_waiting_transport(self, waitingContainers, unloadedContainers)
+            }
+            // Unload if at destination
             Transport::Shipping(transport)
                 if transport.distance_from_base + 1 == transport.distance_to_travel =>
             {
-                Transport::delivering(transport, containers)
+                Transport::delivering(transport, waitingContainers, unloadedContainers)
             }
+            // move loaded transport to destination
             Transport::Shipping(transport) => {
-                Transport::moving_loaded_transport(transport, containers)
+                let (transport, waitingContainers) =
+                    Transport::moving_loaded_transport(transport, waitingContainers);
+                (transport, waitingContainers, unloadedContainers)
             }
+            // returning to base
             Transport::ReturningToBase(transport) => {
-                Transport::returning_to_base(transport, containers)
+                let (transport, waitingContainers) =
+                    Transport::returning_to_base(transport, waitingContainers);
+                (transport, waitingContainers, unloadedContainers)
             }
         }
     }
@@ -190,17 +208,18 @@ impl DeliverySystem {
     fn tick(self) -> DeliverySystem {
         // map through Destination checking if transport is at destination
         let mut new_transports: Vec<Transport> = vec![];
-        let mut new_containers: Vec<Container> = self.containers;
-        println!("");
-        println!("tickkiiingggg");
+        let mut waitingContainers: Vec<Container> = self.containers;
+        let mut unloadedContainers: Vec<Container> = vec![];
         for transport in self.transports.into_iter() {
-            let (new_transport, next_containers) = transport.tick(new_containers.clone());
+            let (new_transport, next_waiting_containers, next_unloaded_containers) =
+                transport.tick(waitingContainers.clone(), unloadedContainers.clone());
             new_transports.push(new_transport);
-            new_containers = next_containers;
+            waitingContainers = next_waiting_containers;
+            unloadedContainers = next_unloaded_containers;
         }
 
         DeliverySystem {
-            containers: new_containers,
+            containers: [waitingContainers, unloadedContainers].concat(),
             transports: new_transports,
             tick: self.tick + 1,
         }
@@ -229,8 +248,10 @@ impl DeliverySystem {
 }
 
 fn run(containers: Vec<Location>) -> u32 {
-    let mut delivery_system =
-        DeliverySystem::new(containers, vec![Transport::Waiting, Transport::Waiting]);
+    let mut delivery_system = DeliverySystem::new(
+        containers,
+        vec![Transport::Waiting, Transport::Waiting, Transport::Waiting],
+    );
     while !delivery_system.all_are_delivered() {
         delivery_system = delivery_system.tick();
     }
@@ -264,4 +285,9 @@ fn test_scenario_4() {
 #[test]
 fn test_scenario_5() {
     assert_eq!(5, run(vec![Location::A]))
+}
+
+#[test]
+fn test_scenario_6() {
+    assert_eq!(7, run(vec![Location::A, Location::B, Location::B]))
 }
