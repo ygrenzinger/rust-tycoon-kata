@@ -143,9 +143,14 @@ impl Transport {
         mut unload_containers: Vec<Container>,
     ) -> (Transport, Vec<Container>, Vec<Container>) {
         let location = transport.destination.clone();
+        let distance_from_base = if transport.distance_from_base == 1 {
+            0
+        } else {
+            transport.distance_from_base
+        };
         let returning_to_base = Transport::ReturningToBase(TransportReturningToBase {
             base: transport.base,
-            distance_from_base: transport.distance_from_base,
+            distance_from_base,
         });
         let remaining_roadmap = &transport.container.roadmap[1..];
         let container = Container {
@@ -229,9 +234,6 @@ impl DeliverySystem {
     }
 
     fn tick(self) -> DeliverySystem {
-        // println!("tick {}", self.tick);
-        // dbg!(&self.containers);
-        // dbg!(&self.transports);
         // map through Destination checking if transport is at destination
         let mut new_transports: Vec<Transport> = vec![];
         let mut containers: Vec<Container> = self.containers;
@@ -298,6 +300,13 @@ fn main() {
     run(vec![Location::B]);
 }
 
+/*
+
+#[test]
+fn test_scenario_0() {
+    assert_eq!(1, run(vec![Location::PORT]));
+}
+
 #[test]
 fn test_scenario_1() {
     assert_eq!(5, run(vec![Location::B]));
@@ -336,4 +345,23 @@ fn test_scenario_7() {
 #[test]
 fn test_scenario_8() {
     assert_eq!(7, run(vec![Location::A, Location::B, Location::B]))
+}
+
+*/
+
+#[test]
+fn test_complete() {
+    assert_eq!(
+        29,
+        run(vec![
+            Location::A,
+            Location::A,
+            Location::B,
+            Location::A,
+            Location::B,
+            Location::B,
+            Location::A,
+            Location::B
+        ])
+    )
 }
